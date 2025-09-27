@@ -16,7 +16,7 @@
         /* Estilos base para el diseño de Neumorfismo */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #e0e5ec; /* Un gris claro es clave para el neumorfismo */
+            background-color: #e0e5ec;
         }
         .neumorphic {
             border-radius: 20px;
@@ -46,7 +46,7 @@
         <!-- Contenedor Principal del Dashboard -->
         <main class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
 
-            <!-- 1. Sensor de Referencia (Ocupa todo el ancho en pantallas grandes) -->
+            <!-- 1. Sensor de Referencia -->
             <div class="neumorphic p-6 lg:col-span-2">
                 <h2 class="text-xl font-bold text-gray-800 mb-1">Sensor de Referencia (Luz Incidente)</h2>
                 <p class="text-sm text-gray-500 mb-4">Mide el 100% de la luz que entra al invernadero.</p>
@@ -73,7 +73,7 @@
                 </div>
             </div>
 
-            <!-- 4. Mapa de Calor y Datos Clave (Ocupa todo el ancho) -->
+            <!-- 4. Mapa de Calor y Datos Clave -->
             <div class="neumorphic p-6 lg:col-span-2">
                 <h2 class="text-xl font-bold text-gray-800 mb-4">Mapa de Calor y Comparativas</h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -81,26 +81,24 @@
                     <div class="md:col-span-2 neumorphic-inset p-6 flex flex-col justify-between items-center h-64 relative">
                         <span class="absolute top-2 left-2 text-xs text-gray-500">Esquema del Invernadero</span>
                         <!-- Punto del Sensor de Referencia -->
-                        <div id="heatmap-ref" class="w-16 h-16 rounded-full transition-colors duration-500 flex items-center justify-center text-white font-bold text-sm" style="background-color: #7f8c8d;">
+                        <div id="heatmap-ref" class="w-16 h-16 rounded-full transition-colors duration-1000 flex items-center justify-center text-white font-bold text-sm neumorphic" style="background-color: #a3b1c6;">
                             REF
                         </div>
                         <div class="flex justify-around w-full">
-                             <!-- Punto de la Cama 1 -->
-                            <div id="heatmap-bed1" class="w-16 h-16 rounded-full transition-colors duration-500 flex items-center justify-center text-white font-bold text-sm" style="background-color: #7f8c8d;">
+                            <div id="heatmap-bed1" class="w-16 h-16 rounded-full transition-colors duration-1000 flex items-center justify-center text-white font-bold text-sm neumorphic" style="background-color: #a3b1c6;">
                                 C1
                             </div>
-                             <!-- Punto de la Cama 2 -->
-                            <div id="heatmap-bed2" class="w-16 h-16 rounded-full transition-colors duration-500 flex items-center justify-center text-white font-bold text-sm" style="background-color: #7f8c8d;">
+                            <div id="heatmap-bed2" class="w-16 h-16 rounded-full transition-colors duration-1000 flex items-center justify-center text-white font-bold text-sm neumorphic" style="background-color: #a3b1c6;">
                                 C2
                             </div>
                         </div>
                     </div>
                     <!-- Datos comparativos clave -->
-                    <div class="neumorphic-flat p-6 flex flex-col justify-center text-center">
+                    <div class="neumorphic-flat p-6 flex flex-col justify-center text-center space-y-2">
                         <h3 class="font-bold text-gray-700 mb-2">Intensidad Total (LUX)</h3>
-                        <p class="text-sm text-gray-500">Referencia: <span id="lux-ref" class="font-bold text-lg text-gray-800">---</span></p>
-                        <p class="text-sm text-gray-500">Cama 1: <span id="lux-bed1" class="font-bold text-lg text-gray-800">---</span></p>
-                        <p class="text-sm text-gray-500">Cama 2: <span id="lux-bed2" class="font-bold text-lg text-gray-800">---</span></p>
+                        <p class="text-sm text-gray-500">Referencia: <span id="lux-ref" class="font-bold text-lg text-gray-800 block">---</span></p>
+                        <p class="text-sm text-gray-500">Cama 1: <span id="lux-bed1" class="font-bold text-lg text-gray-800 block">---</span></p>
+                        <p class="text-sm text-gray-500">Cama 2: <span id="lux-bed2" class="font-bold text-lg text-gray-800 block">---</span></p>
                     </div>
                 </div>
             </div>
@@ -110,12 +108,124 @@
 
     <!-- El motor de JavaScript que llenará el dashboard de vida -->
     <script>
-        // --- PRÓXIMAMENTE ---
-        // Aquí escribiremos el código para:
-        // 1. Llamar a nuestra API en http://127.0.0.1:5000/api/data/current
-        // 2. Crear y actualizar los gráficos de Chart.js con los datos recibidos.
-        // 3. Actualizar los colores del mapa de calor y los valores de LUX.
-        // 4. Repetir todo cada 10 segundos para crear el efecto "en vivo".
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- CONFIGURACIÓN ---
+            const API_URL = 'http://127.0.0.1:5000/api/data/current';
+            const UPDATE_INTERVAL = 5000; // Actualizar cada 5 segundos
+
+            const SPECTRAL_LABELS = [
+                '415nm', '440nm', '485nm', '515nm', '555nm', '590nm',
+                '610nm', '680nm', '730nm', '760nm', '860nm', 'Clear'
+            ];
+            
+            const DATA_KEYS = [
+                'ch_415', 'ch_440', 'ch_485', 'ch_515', 'ch_555', 'ch_590',
+                'ch_610', 'ch_680', 'ch_730', 'ch_760', 'ch_860', 'ch_clear'
+            ];
+
+            // --- INICIALIZACIÓN DE GRÁFICOS ---
+            let charts = {};
+
+            const chartConfig = (label) => ({
+                type: 'bar',
+                data: {
+                    labels: SPECTRAL_LABELS,
+                    datasets: [{
+                        label: label,
+                        data: [],
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1,
+                        borderRadius: 5,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#d1d9e6' } },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Mapeo de IDs de canvas a IDs de sensores de la API
+            const chartMapping = {
+                'Referencia': 'referenceChart',
+                'Cama_1': 'bed1Chart',
+                'Cama_2': 'bed2Chart'
+            };
+
+            // Crear los gráficos usando el mapeo
+            for (const sensorId in chartMapping) {
+                const canvasId = chartMapping[sensorId];
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                charts[sensorId] = new Chart(ctx, chartConfig(`Sensor ${sensorId}`));
+            }
+
+            // --- FUNCIONES AUXILIARES ---
+            function mapLuxToColor(lux, minLux = 0, maxLux = 1500) {
+                if (lux === null || lux === undefined) return '#a3b1c6';
+                const ratio = Math.min(Math.max(lux - minLux, 0) / (maxLux - minLux), 1);
+                const hue = 60 - (ratio * 60);
+                const lightness = 50 + (ratio * 10);
+                return `hsl(${hue}, 80%, ${lightness}%)`;
+            }
+
+            // --- FUNCIÓN PRINCIPAL DE ACTUALIZACIÓN ---
+            async function updateDashboard() {
+                try {
+                    const response = await fetch(API_URL);
+                    if (!response.ok) {
+                        throw new Error(`Error en la API: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+
+                    for (const sensorId in data) {
+                        const sensorData = data[sensorId];
+                        const chart = charts[sensorId];
+
+                        if (sensorData && chart) {
+                            // 1. Actualizar el gráfico
+                            const spectralData = DATA_KEYS.map(key => sensorData[key] || 0);
+                            chart.data.datasets[0].data = spectralData;
+                            chart.update();
+
+                            // 2. *** LÓGICA CORREGIDA PARA ENCONTRAR ELEMENTOS ***
+                            let elementPrefix;
+                            if (sensorId === 'Referencia') {
+                                elementPrefix = 'ref';
+                            } else if (sensorId === 'Cama_1') {
+                                elementPrefix = 'bed1';
+                            } else if (sensorId === 'Cama_2') {
+                                elementPrefix = 'bed2';
+                            }
+
+                            if (elementPrefix) {
+                                const luxValue = sensorData.total_lux || 0;
+                                
+                                // Actualizar texto de LUX
+                                const luxElement = document.getElementById(`lux-${elementPrefix}`);
+                                if (luxElement) luxElement.textContent = luxValue;
+                                
+                                // Actualizar color del heatmap
+                                const heatmapElement = document.getElementById(`heatmap-${elementPrefix}`);
+                                if (heatmapElement) heatmapElement.style.backgroundColor = mapLuxToColor(luxValue);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("No se pudo actualizar el dashboard:", error);
+                }
+            }
+
+            // --- EJECUCIÓN ---
+            updateDashboard(); 
+            setInterval(updateDashboard, UPDATE_INTERVAL);
+        });
     </script>
 </body>
 </html>
+

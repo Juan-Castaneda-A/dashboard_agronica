@@ -1,87 +1,66 @@
 import os
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from dotenv import load_dotenv
+from flask import Flask, jsonify, request
 from supabase import create_client, Client
-from postgrest.exceptions import APIError
+from dotenv import load_dotenv
+from flask_cors import CORS # Importar CORS
 
-# Cargar las variables de entorno desde el archivo .env
 load_dotenv()
 
-# --- Inicialización del Cliente de Supabase ---
+app = Flask(__name__)
+CORS(app) # Habilitar CORS para toda la aplicación
+
+# --- Conexión con Supabase ---
 try:
-    url: str = os.environ.get("SUPABASE_URL")
-    key: str = os.environ.get("SUPABASE_KEY")
-    if not url or not key:
-        raise ValueError("Las variables de entorno SUPABASE_URL y SUPABASE_KEY son necesarias.")
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
     supabase: Client = create_client(url, key)
     print("Conexión con Supabase establecida exitosamente.")
 except Exception as e:
-    print(f"Error al inicializar Supabase: {e}")
-    supabase = None
+    print(f"Error al conectar con Supabase: {e}")
 
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/')
-def home():
-    return "API de SOLARTRACE Live funcionando con Supabase-py!"
-
-# --- Rutas de la API actualizadas ---
+# --- Rutas de la API ---
 
 @app.route('/api/data/ingest', methods=['POST'])
 def ingest_data():
-    """Recibe datos del sensor y los inserta en la tabla 'sensor_readings'."""
-    if not supabase:
-        return jsonify({"error": "La conexión con Supabase no está configurada."}), 500
-
     data = request.get_json()
-    if not data:
-        return jsonify({"error": "No se recibieron datos"}), 400
-
     try:
-        # Usamos la sintaxis de supabase-py para insertar los datos
-        response = supabase.table('sensor_readings').insert(data).execute()
-        
-        # La API de Supabase devuelve una lista de datos insertados.
-        # Si la inserción fue exitosa, la respuesta tendrá datos.
-        if response.data:
-            return jsonify({"message": f"Datos recibidos del sensor {data.get('sensor_id', 'desconocido')}"}), 201
-        else:
-            # Si no hay datos, puede que haya habido un error no capturado
-            return jsonify({"error": "La inserción no devolvió datos, posible error.", "details": response.error}), 400
-
-    except APIError as e:
-        return jsonify({"error": "Error de la API de Supabase", "details": str(e)}), 500
+        # No incluimos 'timestamp' porque la DB lo genera automáticamente
+        insert_data = {
+            "sensor_id": data.get("sensor_id"),
+            "ch_415": data.get("ch_415"), "ch_440": data.get("ch_440"),
+            "ch_485": data.get("ch_485"), "ch_515": data.get("ch_515"),
+            "ch_555": data.get("ch_555"), "ch_590": data.get("ch_590"),
+            "ch_610": data.get("ch_610"), "ch_680": data.get("ch_680"),
+            "ch_730": data.get("ch_730"), "ch_760": data.get("ch_760"),
+            "ch_860": data.get("ch_860"), "ch_clear": data.get("ch_clear"),
+            "total_lux": data.get("total_lux")
+        }
+        response = supabase.table('sensor_readings').insert(insert_data).execute()
+        return jsonify({"message": f"Éxito: Datos recibidos del sensor {data.get('sensor_id')}"}), 201
     except Exception as e:
-        return jsonify({"error": "Ocurrió un error inesperado", "details": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/data/current', methods=['GET'])
 def get_current_data():
-    """
-    Obtiene la última lectura de cada sensor llamando a la función RPC
-    que creamos en la base de datos.
-    """
-    if not supabase:
-        return jsonify({"error": "La conexión con Supabase no está configurada."}), 500
-
     try:
-        # Llamamos a la función 'get_latest_readings' que creamos en el SQL Editor
-        response = supabase.rpc('get_latest_readings', {}).execute()
-
-        if response.data:
-            # Formateamos la respuesta para que sea un diccionario {sensor_id: datos}
-            formatted_data = {row['sensor_id']: row for row in response.data}
-            return jsonify(formatted_data)
-        else:
-            return jsonify({"error": "No se encontraron datos", "details": response.error}), 404
-
-    except APIError as e:
-        return jsonify({"error": "Error de la API de Supabase", "details": str(e)}), 500
+        # Llamamos a la función que creamos en la base de datos
+        response = supabase.rpc('get_latest_readings').execute()
+        
+        # Procesamos los datos para que tengan el formato {sensor_id: {datos}}
+        formatted_data = {}
+        for row in response.data:
+            sensor_id = row.get('sensor_id')
+            formatted_data[sensor_id] = row
+            
+        return jsonify(formatted_data), 200
     except Exception as e:
-        return jsonify({"error": "Ocurrió un error inesperado", "details": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+        
+# --- Ruta de Verificación (Health Check) ---
+@app.route('/')
+def index():
+    return "API de SOLARTRACE está en funcionamiento."
 
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+# Nota: El bloque if __name__ == '__main__': no es necesario
+# porque Gunicorn se encargará de ejecutar la aplicación.
 
