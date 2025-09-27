@@ -4,7 +4,7 @@ import time
 import json
 
 # URL del endpoint de ingesta de nuestra API Flask
-API_INGEST_URL = "http://127.0.0.1:5000/api/data/ingest"
+API_INGEST_URL = "https://solartrace-api.onrender.com/api/data/ingest"
 
 # Identificadores de los 3 nodos de sensores
 SENSOR_IDS = ["Referencia", "Cama_1", "Cama_2"]
